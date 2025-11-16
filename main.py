@@ -1,6 +1,7 @@
 import questionary
 from features.transactions import transactions
 from features.budgets import budget
+from features.analytics.analytics import display_analytics
 
 def main():
     """Main function to run the finance tracker CLI."""
@@ -14,6 +15,7 @@ def main():
                 'View Balance',
                 'Set Budget',
                 'View Budgets',
+                'View Analytics',
                 'Exit'
             ]
         ).ask()
@@ -30,6 +32,8 @@ def main():
             budget.add_budget()
         elif choice == 'View Budgets':
             budget.view_budgets()
+        elif choice == 'View Analytics':
+            display_analytics()
         elif choice == 'Exit' or choice is None:
             break
 
