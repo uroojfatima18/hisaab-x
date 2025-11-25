@@ -1,0 +1,1 @@
+{"date": "2025-11-24", "type": "income", "category_or_source": "Initial Balance", "description": "Starting Balance", "amount_paisa": 200000}

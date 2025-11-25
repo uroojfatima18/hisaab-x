@@ -1,6 +1,6 @@
 import subprocess
 import questionary
-from features.transactions import transactions
+from features.transactions2 import transactions
 from features.budgets import budget
 from features.analytics.analytics import display_analytics
 from features.smart_assistant.smart_assistant import display_smart_assistant_dashboard
@@ -39,7 +39,7 @@ def main():
                 'Create Backup',
                 'Restore from Backup',
                 'Validate Data Integrity',
-                'Launch Web Dashboard',
+                'Web Dashboard',
                 'Exit'
             ]
         ).ask()
@@ -80,12 +80,8 @@ def main():
             data_management.create_backup()
         elif choice == 'Restore from Backup':
             data_management.restore_from_backup()
-        elif choice == 'Validate Data Integrity':
-            data_management.validate_data_integrity()
-        elif choice == 'Launch Web Dashboard':
-            console.print("[bold green]Launching Streamlit Web Dashboard...[/bold green]")
-            console.print("[yellow]You might need to open the URL manually.[/yellow]")
-            run_shell_command("streamlit run streamlit_dashboard.py", description="Launch Streamlit web dashboard")
+        elif choice == 'Web Dashboard':
+            run_shell_command("streamlit run day-7/dashboard.py", "Launching web dashboard...")
         elif choice == 'Exit' or choice is None:
             break
 

@@ -28,28 +28,46 @@ def _get_date_input(prompt: str) -> str:
         except ValueError:
             console.print("[red]Invalid date format. Please use YYYY-MM-DD.[/red]")
 
+import json
+
 def _read_transactions():
     transactions = []
     try:
         with open(TRANSACTIONS_FILE, "r") as f:
             for line in f:
-                parts = line.strip().split(',')
-                if len(parts) == 5:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    data = json.loads(line)
                     transactions.append({
-                        "date": parts[0],
-                        "type": parts[1],
-                        "category_or_source": parts[2],
-                        "description": parts[3],
-                        "amount_paisa": int(parts[4])
+                        "date": data["date"],
+                        "type": data["type"],
+                        "category_or_source": data["category_or_source"],
+                        "description": data["description"],
+                        "amount_paisa": int(data["amount_paisa"])
                     })
+                except json.JSONDecodeError:
+                    console.print(f"[yellow]Skipping malformed transaction line: {line}[/yellow]")
     except FileNotFoundError:
         console.print(f"[yellow]No transactions found in {TRANSACTIONS_FILE}.[/yellow]")
+
     return transactions
 
-def _save_transaction(date: str, type: str, category_or_source: str, description: str, amount_paisa: int):
+
+def _save_transaction(date, type, category_or_source, description, amount_paisa):
     with open(TRANSACTIONS_FILE, "a") as f:
-        f.write(f"{date},{type},{category_or_source},{description},{amount_paisa}\n")
+        json.dump({
+            "date": date,
+            "type": type,
+            "category_or_source": category_or_source,
+            "description": description,
+            "amount_paisa": amount_paisa
+        }, f)
+        f.write("\n")
+
     console.print(f"[green]{type.capitalize()} added successfully![/green]")
+
 
 def add_expense():
     console.print("\n[bold blue]Add New Expense[/bold blue]")

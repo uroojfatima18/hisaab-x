@@ -7,5 +7,6 @@ requires-python = ">=3.12"
 dependencies = [
     "questionary>=2.1.1",
     "rich>=14.2.0",
-    "streamlit>=1.51.0",
+    "streamlit",
+    "pandas",
 ]

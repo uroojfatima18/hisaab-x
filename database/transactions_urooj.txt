@@ -1,0 +1,1 @@
+{"date": "2025-11-24", "type": "income", "category": "Freelance", "description": "", "amount_paisa": 1000000}

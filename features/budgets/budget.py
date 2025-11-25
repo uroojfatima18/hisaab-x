@@ -5,6 +5,7 @@ from rich.progress import Progress, BarColumn, TextColumn, track
 from rich.text import Text
 from datetime import datetime
 import os
+import json
 
 # Initialize Rich Console
 console = Console()
@@ -24,17 +25,22 @@ def _ensure_budget_file_exists():
         with open(BUDGET_FILE, "w") as f:
             f.write("")
 
+
 def _load_budgets():
-    """Loads budgets from the budget file."""
     _ensure_budget_file_exists()
     budgets = {}
     with open(BUDGET_FILE, "r") as f:
         for line in f:
-            parts = line.strip().split(',')
-            if len(parts) == 2:
-                category, amount_paisa = parts
-                budgets[category] = int(amount_paisa)
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+                budgets[entry["category"]] = entry["amount_paisa"]
+            except json.JSONDecodeError:
+                pass
     return budgets
+
 
 def _load_transactions():
     """Loads transactions from the transactions file."""

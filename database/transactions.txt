@@ -1,0 +1,2 @@
+{"date": "2025-11-24", "type": "income", "category_or_source": "Salary", "description": "", "amount_paisa": 10000000}
+{"date": "2025-11-24", "type": "expense", "category_or_source": "Bills", "description": "", "amount_paisa": 1100000}
