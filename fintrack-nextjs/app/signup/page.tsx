@@ -74,7 +74,7 @@ export default function SignupPage() {
                 <div className="bg-white rounded-3xl shadow-hover p-10">
                     {/* Logo */}
                     <div className="mb-4 text-center">
-                        <div className="w-60 h-60 mx-auto relative">
+                        <div className="w-60 h-28 mx-auto relative">
                             <Image
                                 src="/logo.png"
                                 alt="HissabX Logo"

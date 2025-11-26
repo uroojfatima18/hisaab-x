@@ -51,7 +51,7 @@ export default function LoginPage() {
                 <div className="bg-white rounded-3xl shadow-hover p-10 text-center">
                     {/* Logo */}
                     <div className="mb-4">
-                        <div className="w-60 h-60 mx-auto relative">
+                        <div className="w-60 h-28 mx-auto relative">
                             <Image
                                 src="/logo.png"
                                 alt="HissabX Logo"
