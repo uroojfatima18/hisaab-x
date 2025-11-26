@@ -18,7 +18,7 @@ export default function BudgetsPage() {
     const [editingCategory, setEditingCategory] = useState<string | null>(null);
 
     // Form state
-    const [category, setCategory] = useState(EXPENSE_CATEGORIES[0]);
+    const [category, setCategory] = useState<string>(EXPENSE_CATEGORIES[0]);
     const [limit, setLimit] = useState('');
     const [yearlyLimit, setYearlyLimit] = useState('');
 
