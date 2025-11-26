@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useSettings } from '@/context/SettingsContext';
@@ -10,7 +10,7 @@ import { Transaction, EXPENSE_CATEGORIES, INCOME_SOURCES } from '@/types/transac
 import { generateId, formatAmount, formatDate, getCategoryIcon } from '@/lib/utils';
 import { Trash2, Edit2, Plus } from 'lucide-react';
 
-export default function TransactionsPage() {
+function TransactionsContent() {
     const searchParams = useSearchParams();
     const search = searchParams.get('search');
     const { username } = useAuth();
@@ -280,5 +280,13 @@ export default function TransactionsPage() {
                 )}
             </div>
         </DashboardLayout>
+    );
+}
+
+export default function TransactionsPage() {
+    return (
+        <Suspense fallback={<div>Loading...</div>}>
+            <TransactionsContent />
+        </Suspense>
     );
 }
