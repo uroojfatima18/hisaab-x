@@ -5,19 +5,30 @@ import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useSettings } from '@/context/SettingsContext';
 import DashboardLayout from '@/components/layout/DashboardLayout';
-import { getTransactions, addTransaction, deleteTransaction, updateTransaction } from '@/lib/storage';
-import { Transaction, EXPENSE_CATEGORIES, INCOME_SOURCES } from '@/types/transaction';
-import { generateId, formatAmount, formatDate, getCategoryIcon } from '@/lib/utils';
+import * as api from '@/lib/api';
+import { EXPENSE_CATEGORIES, INCOME_SOURCES } from '@/types/transaction';
+import { formatAmount, formatDate, getCategoryIcon } from '@/lib/utils';
 import { Trash2, Edit2, Plus } from 'lucide-react';
+
+interface TransactionDisplay {
+    id: string;
+    date: string;
+    type: 'income' | 'expense';
+    category: string;
+    description: string;
+    amount_paisa: number;
+}
 
 function TransactionsContent() {
     const searchParams = useSearchParams();
     const search = searchParams.get('search');
-    const { username } = useAuth();
+    const { isAuthenticated } = useAuth();
     const { settings } = useSettings();
-    const [transactions, setTransactions] = useState<Transaction[]>([]);
+    const [transactions, setTransactions] = useState<TransactionDisplay[]>([]);
+    const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
+    const [saving, setSaving] = useState(false);
 
     // Form state
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -27,24 +38,39 @@ function TransactionsContent() {
     const [amount, setAmount] = useState('');
 
     useEffect(() => {
-        if (username) {
+        if (isAuthenticated) {
             loadTransactions();
         }
-    }, [username, search]);
+    }, [isAuthenticated, search]);
 
-    const loadTransactions = () => {
-        if (!username) return;
-        let data = getTransactions(username);
+    const loadTransactions = async () => {
+        setLoading(true);
+        try {
+            const { transactions: data } = await api.getTransactions();
 
-        if (search) {
-            const lowerSearch = search.toLowerCase();
-            data = data.filter(t =>
-                t.description.toLowerCase().includes(lowerSearch) ||
-                t.category.toLowerCase().includes(lowerSearch)
-            );
+            let filteredData = data.map(t => ({
+                id: t.id,
+                date: t.date.split('T')[0],
+                type: t.type as 'income' | 'expense',
+                category: t.category,
+                description: t.description,
+                amount_paisa: t.amountPaisa,
+            }));
+
+            if (search) {
+                const lowerSearch = search.toLowerCase();
+                filteredData = filteredData.filter(t =>
+                    t.description.toLowerCase().includes(lowerSearch) ||
+                    t.category.toLowerCase().includes(lowerSearch)
+                );
+            }
+
+            setTransactions(filteredData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+        } catch (error) {
+            console.error('Failed to load transactions:', error);
+        } finally {
+            setLoading(false);
         }
-
-        setTransactions(data.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
     };
 
     const categories = type === 'expense' ? EXPENSE_CATEGORIES : INCOME_SOURCES;
@@ -53,32 +79,37 @@ function TransactionsContent() {
         setCategory(categories[0]);
     }, [type]);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!username) return;
+        setSaving(true);
 
-        const transactionData: Transaction = {
-            id: editingId || generateId(),
-            date,
-            type,
-            category,
-            description,
-            amount_paisa: Math.round(parseFloat(amount) * 100),
-        };
+        try {
+            const transactionData = {
+                date: new Date(date).toISOString(),
+                type: type as 'income' | 'expense',
+                category,
+                description,
+                amountPaisa: Math.round(parseFloat(amount) * 100),
+            };
 
-        if (editingId) {
-            updateTransaction(username, editingId, transactionData);
-            setEditingId(null);
-        } else {
-            addTransaction(username, transactionData);
+            if (editingId) {
+                await api.updateTransaction(editingId, transactionData);
+                setEditingId(null);
+            } else {
+                await api.createTransaction(transactionData);
+            }
+
+            resetForm();
+            await loadTransactions();
+            setShowForm(false);
+        } catch (error) {
+            console.error('Failed to save transaction:', error);
+        } finally {
+            setSaving(false);
         }
-
-        resetForm();
-        loadTransactions();
-        setShowForm(false);
     };
 
-    const handleEdit = (transaction: Transaction) => {
+    const handleEdit = (transaction: TransactionDisplay) => {
         setEditingId(transaction.id);
         setDate(transaction.date);
         setType(transaction.type);
@@ -88,11 +119,14 @@ function TransactionsContent() {
         setShowForm(true);
     };
 
-    const handleDelete = (id: string) => {
-        if (!username) return;
+    const handleDelete = async (id: string) => {
         if (confirm('Delete this transaction?')) {
-            deleteTransaction(username, id);
-            loadTransactions();
+            try {
+                await api.deleteTransaction(id);
+                await loadTransactions();
+            } catch (error) {
+                console.error('Failed to delete transaction:', error);
+            }
         }
     };
 
@@ -104,6 +138,16 @@ function TransactionsContent() {
         setAmount('');
         setEditingId(null);
     };
+
+    if (loading) {
+        return (
+            <DashboardLayout>
+                <div className="flex items-center justify-center h-64">
+                    <div className="text-lg text-slate-500">Loading transactions...</div>
+                </div>
+            </DashboardLayout>
+        );
+    }
 
     return (
         <DashboardLayout>
@@ -192,8 +236,8 @@ function TransactionsContent() {
                         </div>
 
                         <div className="col-span-2 flex gap-3">
-                            <button type="submit" className="btn-primary flex-1">
-                                {editingId ? 'Update' : 'Save'} Transaction
+                            <button type="submit" disabled={saving} className="btn-primary flex-1">
+                                {saving ? 'Saving...' : editingId ? 'Update' : 'Save'} Transaction
                             </button>
                             <button
                                 type="button"

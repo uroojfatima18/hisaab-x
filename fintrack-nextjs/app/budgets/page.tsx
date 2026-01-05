@@ -4,16 +4,28 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useSettings } from '@/context/SettingsContext';
 import DashboardLayout from '@/components/layout/DashboardLayout';
-import { getBudgets, addOrUpdateBudget, deleteBudget, getTransactions } from '@/lib/storage';
-import { Budget } from '@/types/budget';
+import * as api from '@/lib/api';
 import { EXPENSE_CATEGORIES } from '@/types/transaction';
 import { formatAmount } from '@/lib/utils';
 import { Trash2, Edit2, Plus } from 'lucide-react';
 
+interface BudgetDisplay {
+    category: string;
+    limit: number;
+    yearlyLimit?: number;
+    spent: number;
+    percentage: number;
+    spentYearly: number;
+    percentageYearly: number;
+}
+
 export default function BudgetsPage() {
-    const { username } = useAuth();
+    const { isAuthenticated } = useAuth();
     const { settings } = useSettings();
-    const [budgets, setBudgets] = useState<Budget[]>([]);
+    const [budgets, setBudgets] = useState<api.Budget[]>([]);
+    const [transactions, setTransactions] = useState<api.Transaction[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
     const [showForm, setShowForm] = useState(false);
     const [editingCategory, setEditingCategory] = useState<string | null>(null);
 
@@ -23,32 +35,49 @@ export default function BudgetsPage() {
     const [yearlyLimit, setYearlyLimit] = useState('');
 
     useEffect(() => {
-        if (username) {
-            loadBudgets();
+        if (isAuthenticated) {
+            loadData();
         }
-    }, [username]);
+    }, [isAuthenticated]);
 
-    const loadBudgets = () => {
-        if (!username) return;
-        setBudgets(getBudgets(username));
+    const loadData = async () => {
+        setLoading(true);
+        try {
+            const [budgetsRes, transactionsRes] = await Promise.all([
+                api.getBudgets(),
+                api.getTransactions()
+            ]);
+            setBudgets(budgetsRes.budgets);
+            setTransactions(transactionsRes.transactions);
+        } catch (error) {
+            console.error('Failed to load data:', error);
+        } finally {
+            setLoading(false);
+        }
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!username) return;
+        setSaving(true);
 
-        addOrUpdateBudget(username, {
-            category: editingCategory || category,
-            limit: Math.round(parseFloat(limit) * 100),
-            yearlyLimit: yearlyLimit ? Math.round(parseFloat(yearlyLimit) * 100) : undefined,
-        });
+        try {
+            await api.saveBudget({
+                category: editingCategory || category,
+                limit: Math.round(parseFloat(limit) * 100),
+                yearlyLimit: yearlyLimit ? Math.round(parseFloat(yearlyLimit) * 100) : undefined,
+            });
 
-        resetForm();
-        loadBudgets();
-        setShowForm(false);
+            resetForm();
+            await loadData();
+            setShowForm(false);
+        } catch (error) {
+            console.error('Failed to save budget:', error);
+        } finally {
+            setSaving(false);
+        }
     };
 
-    const handleEdit = (budget: Budget) => {
+    const handleEdit = (budget: api.Budget) => {
         setEditingCategory(budget.category);
         setCategory(budget.category);
         setLimit((budget.limit / 100).toString());
@@ -56,11 +85,14 @@ export default function BudgetsPage() {
         setShowForm(true);
     };
 
-    const handleDelete = (category: string) => {
-        if (!username) return;
+    const handleDelete = async (category: string) => {
         if (confirm(`Delete budget for ${category}?`)) {
-            deleteBudget(username, category);
-            loadBudgets();
+            try {
+                await api.deleteBudget(category);
+                await loadData();
+            } catch (error) {
+                console.error('Failed to delete budget:', error);
+            }
         }
     };
 
@@ -72,10 +104,7 @@ export default function BudgetsPage() {
     };
 
     // Calculate budget utilization
-    const budgetData = budgets.map((budget) => {
-        if (!username) return { ...budget, spent: 0, percentage: 0, spentYearly: 0, percentageYearly: 0 };
-
-        const transactions = getTransactions(username);
+    const budgetData: BudgetDisplay[] = budgets.map((budget) => {
         const now = new Date();
 
         // Monthly Data
@@ -89,7 +118,7 @@ export default function BudgetsPage() {
             );
         });
 
-        const spent = currentMonthTransactions.reduce((sum, t) => sum + t.amount_paisa, 0);
+        const spent = currentMonthTransactions.reduce((sum, t) => sum + t.amountPaisa, 0);
         const percentage = (spent / budget.limit) * 100;
 
         // Yearly Data
@@ -102,11 +131,29 @@ export default function BudgetsPage() {
             );
         });
 
-        const spentYearly = currentYearTransactions.reduce((sum, t) => sum + t.amount_paisa, 0);
+        const spentYearly = currentYearTransactions.reduce((sum, t) => sum + t.amountPaisa, 0);
         const percentageYearly = budget.yearlyLimit ? (spentYearly / budget.yearlyLimit) * 100 : 0;
 
-        return { ...budget, spent, percentage, spentYearly, percentageYearly };
+        return {
+            category: budget.category,
+            limit: budget.limit,
+            yearlyLimit: budget.yearlyLimit || undefined,
+            spent,
+            percentage,
+            spentYearly,
+            percentageYearly
+        };
     });
+
+    if (loading) {
+        return (
+            <DashboardLayout>
+                <div className="flex items-center justify-center h-64">
+                    <div className="text-lg text-slate-500">Loading budgets...</div>
+                </div>
+            </DashboardLayout>
+        );
+    }
 
     return (
         <DashboardLayout>
@@ -176,8 +223,8 @@ export default function BudgetsPage() {
                         </div>
 
                         <div className="col-span-1 md:col-span-3 flex gap-3 mt-2">
-                            <button type="submit" className="btn-primary flex-1">
-                                {editingCategory ? 'Update' : 'Set'} Budget
+                            <button type="submit" disabled={saving} className="btn-primary flex-1">
+                                {saving ? 'Saving...' : editingCategory ? 'Update' : 'Set'} Budget
                             </button>
                             <button
                                 type="button"
@@ -199,10 +246,6 @@ export default function BudgetsPage() {
                 {budgetData.length > 0 ? (
                     <div className="divide-y divide-slate-100">
                         {budgetData.map((budget) => {
-                            // Monthly Calculations
-                            const limitAmount = budget.limit / 100;
-                            const spentAmount = budget.spent / 100;
-                            const remaining = limitAmount - spentAmount;
                             const percentage = budget.percentage;
 
                             let statusColor = '#10b981';
@@ -219,10 +262,6 @@ export default function BudgetsPage() {
                                 statusText = 'Warning';
                             }
 
-                            // Yearly Calculations
-                            const yearlyLimitAmount = budget.yearlyLimit ? budget.yearlyLimit / 100 : 0;
-                            const spentYearlyAmount = budget.spentYearly ? budget.spentYearly / 100 : 0;
-                            const remainingYearly = yearlyLimitAmount - spentYearlyAmount;
                             const percentageYearly = budget.percentageYearly || 0;
 
                             return (
@@ -254,7 +293,10 @@ export default function BudgetsPage() {
 
                                             <div className="flex gap-2">
                                                 <button
-                                                    onClick={() => handleEdit(budget)}
+                                                    onClick={() => {
+                                                        const originalBudget = budgets.find(b => b.category === budget.category);
+                                                        if (originalBudget) handleEdit(originalBudget);
+                                                    }}
                                                     className="p-2 hover:bg-blue-50 rounded-lg text-blue-600 transition-colors"
                                                 >
                                                     <Edit2 className="w-4 h-4" />

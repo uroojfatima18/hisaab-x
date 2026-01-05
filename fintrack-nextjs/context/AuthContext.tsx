@@ -2,10 +2,15 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { AuthState } from '@/types/user';
+import * as api from '@/lib/api';
 
 interface AuthContextType extends AuthState {
-    login: (username: string) => void;
-    logout: () => void;
+    user: api.User | null;
+    loading: boolean;
+    loginUser: (username: string, password: string) => Promise<void>;
+    signupUser: (username: string, email: string, password: string) => Promise<void>;
+    logout: () => Promise<void>;
+    refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -15,28 +20,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isAuthenticated: false,
         username: null,
     });
+    const [user, setUser] = useState<api.User | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    const refreshUser = async () => {
+        try {
+            const { user } = await api.getCurrentUser();
+            setUser(user);
+            setAuthState({
+                isAuthenticated: true,
+                username: user.username,
+            });
+        } catch {
+            setUser(null);
+            setAuthState({
+                isAuthenticated: false,
+                username: null,
+            });
+        }
+    };
 
     useEffect(() => {
         // Check if user is logged in on mount
-        const storedUsername = localStorage.getItem('currentUser');
-        if (storedUsername) {
-            setAuthState({
-                isAuthenticated: true,
-                username: storedUsername,
-            });
-        }
+        refreshUser().finally(() => setLoading(false));
     }, []);
 
-    const login = (username: string) => {
-        localStorage.setItem('currentUser', username);
+    const loginUser = async (username: string, password: string) => {
+        const { user } = await api.login(username, password);
+        setUser(user);
         setAuthState({
             isAuthenticated: true,
-            username,
+            username: user.username,
         });
     };
 
-    const logout = () => {
-        localStorage.removeItem('currentUser');
+    const signupUser = async (username: string, email: string, password: string) => {
+        const { user } = await api.signup(username, email, password);
+        setUser(user);
+        setAuthState({
+            isAuthenticated: true,
+            username: user.username,
+        });
+    };
+
+    const logout = async () => {
+        await api.logout();
+        setUser(null);
         setAuthState({
             isAuthenticated: false,
             username: null,
@@ -44,7 +73,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     return (
-        <AuthContext.Provider value={{ ...authState, login, logout }}>
+        <AuthContext.Provider value={{ ...authState, user, loading, loginUser, signupUser, logout, refreshUser }}>
             {children}
         </AuthContext.Provider>
     );

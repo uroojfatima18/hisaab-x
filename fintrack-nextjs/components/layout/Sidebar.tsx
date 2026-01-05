@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import {
@@ -10,6 +9,7 @@ import {
     BarChart3,
     Target,
     Settings,
+    TrendingUp,
 } from 'lucide-react';
 
 const menuItems = [
@@ -27,17 +27,9 @@ export default function Sidebar() {
     return (
         <div className="w-64 h-screen bg-white/80 backdrop-blur-xl border-r border-white/50 flex flex-col">
             {/* Logo */}
-            <div className="pt-6 px-4 pb-4">
-                <div className="flex justify-center">
-                    <Image
-                        src="/logo.png"
-                        alt="HissabX Logo"
-                        width={250}
-                        height={250}
-                        className="object-contain"
-                    />
-                </div>
-                <p className="text-xs text-slate-500 text-center">Logged in as <span className="font-medium">{username}</span></p>
+            <div className="flex items-center gap-3 px-6 py-8">
+                <TrendingUp className="w-8 h-8 text-blue-500" />
+                <span className="text-2xl font-bold text-slate-800">HisaabX</span>
             </div>
 
             {/* Navigation */}

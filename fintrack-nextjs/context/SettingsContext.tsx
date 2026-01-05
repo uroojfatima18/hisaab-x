@@ -1,42 +1,89 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { UserSettings } from '@/types/user';
-import { getUserSettings, saveUserSettings } from '@/lib/storage';
 import { useAuth } from './AuthContext';
+import * as api from '@/lib/api';
 
 interface SettingsContextType {
-    settings: UserSettings;
-    updateSettings: (updates: Partial<UserSettings>) => void;
+    settings: {
+        currency: string;
+        symbol: string;
+        setup_complete: boolean;
+        initialBalance: number;
+    };
+    loading: boolean;
+    updateSettings: (updates: Partial<{
+        currency: string;
+        symbol: string;
+        setupComplete: boolean;
+        initialBalance: number;
+    }>) => Promise<void>;
+    refreshSettings: () => Promise<void>;
 }
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
-    const { username } = useAuth();
-    const [settings, setSettings] = useState<UserSettings>({
-        currency: 'INR',
-        symbol: '₹',
+    const { isAuthenticated, user } = useAuth();
+    const [settings, setSettings] = useState({
+        currency: 'USD',
+        symbol: '$',
         setup_complete: false,
+        initialBalance: 0,
     });
+    const [loading, setLoading] = useState(true);
+
+    const refreshSettings = async () => {
+        if (!isAuthenticated) {
+            setLoading(false);
+            return;
+        }
+
+        try {
+            const { settings: apiSettings } = await api.getSettings();
+            setSettings({
+                currency: apiSettings.currency,
+                symbol: apiSettings.symbol,
+                setup_complete: apiSettings.setupComplete,
+                initialBalance: apiSettings.initialBalance,
+            });
+        } catch (error) {
+            console.error('Failed to fetch settings:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     useEffect(() => {
-        if (username) {
-            const userSettings = getUserSettings(username);
-            setSettings(userSettings);
+        if (isAuthenticated) {
+            refreshSettings();
+        } else {
+            setLoading(false);
         }
-    }, [username]);
+    }, [isAuthenticated, user]);
 
-    const updateSettings = (updates: Partial<UserSettings>) => {
-        if (!username) return;
-
-        const newSettings = { ...settings, ...updates };
-        setSettings(newSettings);
-        saveUserSettings(username, newSettings);
+    const updateSettings = async (updates: Partial<{
+        currency: string;
+        symbol: string;
+        setupComplete: boolean;
+        initialBalance: number;
+    }>) => {
+        try {
+            const { settings: apiSettings } = await api.updateSettings(updates);
+            setSettings({
+                currency: apiSettings.currency,
+                symbol: apiSettings.symbol,
+                setup_complete: apiSettings.setupComplete,
+                initialBalance: apiSettings.initialBalance,
+            });
+        } catch (error) {
+            console.error('Failed to update settings:', error);
+            throw error;
+        }
     };
 
     return (
-        <SettingsContext.Provider value={{ settings, updateSettings }}>
+        <SettingsContext.Provider value={{ settings, loading, updateSettings, refreshSettings }}>
             {children}
         </SettingsContext.Provider>
     );

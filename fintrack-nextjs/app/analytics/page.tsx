@@ -6,14 +6,23 @@ import { useSettings } from '@/context/SettingsContext';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import BalanceTrendChart from '@/components/charts/BalanceTrendChart';
 import CashFlowChart from '@/components/charts/CashFlowChart';
-import { getTransactions } from '@/lib/storage';
-import { Transaction, EXPENSE_CATEGORIES, INCOME_SOURCES } from '@/types/transaction';
+import * as api from '@/lib/api';
 import { formatAmount, getCategoryIcon } from '@/lib/utils';
 
+interface TransactionDisplay {
+    id: string;
+    date: string;
+    type: 'income' | 'expense';
+    category: string;
+    description: string;
+    amount_paisa: number;
+}
+
 export default function AnalyticsPage() {
-    const { username } = useAuth();
+    const { isAuthenticated } = useAuth();
     const { settings } = useSettings();
-    const [transactions, setTransactions] = useState<Transaction[]>([]);
+    const [transactions, setTransactions] = useState<TransactionDisplay[]>([]);
+    const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'reports' | 'trend' | 'cashflow'>('reports');
 
     // Filters
@@ -27,14 +36,28 @@ export default function AnalyticsPage() {
     });
 
     useEffect(() => {
-        if (username) {
+        if (isAuthenticated) {
             loadTransactions();
         }
-    }, [username]);
+    }, [isAuthenticated]);
 
-    const loadTransactions = () => {
-        if (!username) return;
-        setTransactions(getTransactions(username));
+    const loadTransactions = async () => {
+        setLoading(true);
+        try {
+            const { transactions: data } = await api.getTransactions();
+            setTransactions(data.map(t => ({
+                id: t.id,
+                date: t.date.split('T')[0],
+                type: t.type as 'income' | 'expense',
+                category: t.category,
+                description: t.description,
+                amount_paisa: t.amountPaisa,
+            })));
+        } catch (error) {
+            console.error('Failed to load transactions:', error);
+        } finally {
+            setLoading(false);
+        }
     };
 
     // Filter transactions
@@ -99,6 +122,16 @@ export default function AnalyticsPage() {
         (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
     );
 
+    if (loading) {
+        return (
+            <DashboardLayout>
+                <div className="flex items-center justify-center h-64">
+                    <div className="text-lg text-slate-500">Loading analytics...</div>
+                </div>
+            </DashboardLayout>
+        );
+    }
+
     return (
         <DashboardLayout>
             <h1 className="text-3xl font-bold text-slate-900 mb-6">Analytics</h1>
@@ -160,7 +193,7 @@ export default function AnalyticsPage() {
                     ].map((tab) => (
                         <button
                             key={tab.id}
-                            onClick={() => setActiveTab(tab.id as any)}
+                            onClick={() => setActiveTab(tab.id as 'reports' | 'trend' | 'cashflow')}
                             className={`flex-1 px-6 py-4 font-medium transition-colors ${activeTab === tab.id
                                     ? 'text-primary-600 border-b-2 border-primary-600 bg-primary-50'
                                     : 'text-slate-600 hover:bg-slate-50'

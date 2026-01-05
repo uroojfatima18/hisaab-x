@@ -5,39 +5,40 @@ import { useAuth } from '@/context/AuthContext';
 import { useSettings } from '@/context/SettingsContext';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { getCurrencyOptions, CURRENCIES } from '@/constants/currencies';
-import { getUser, saveUser, clearAllTransactions, clearAllBudgets, factoryReset } from '@/lib/storage';
+import * as api from '@/lib/api';
 import { AlertTriangle, Camera } from 'lucide-react';
 
 export default function SettingsPage() {
     const router = useRouter();
-    const { username, logout } = useAuth();
+    const { user, logout, refreshUser } = useAuth();
     const { settings, updateSettings } = useSettings();
     const [selectedCurrency, setSelectedCurrency] = useState(settings.currency);
     const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+    const [saving, setSaving] = useState(false);
 
     useEffect(() => {
-        if (username) {
-            const user = getUser(username);
-            if (user?.avatarUrl) {
-                setAvatarUrl(user.avatarUrl);
-            }
+        if (user?.avatarUrl) {
+            setAvatarUrl(user.avatarUrl);
         }
-    }, [username]);
+    }, [user]);
 
-    const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    useEffect(() => {
+        setSelectedCurrency(settings.currency);
+    }, [settings.currency]);
+
+    const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (file && username) {
+        if (file) {
             const reader = new FileReader();
-            reader.onloadend = () => {
+            reader.onloadend = async () => {
                 const base64 = reader.result as string;
                 setAvatarUrl(base64);
 
-                // Save to user storage
-                const user = getUser(username);
-                if (user) {
-                    saveUser(username, { ...user, avatarUrl: base64 });
-                    // Force reload to update TopBar
-                    window.location.reload();
+                try {
+                    await api.updateUser({ avatarUrl: base64 });
+                    await refreshUser();
+                } catch (error) {
+                    console.error('Failed to update avatar:', error);
                 }
             };
             reader.readAsDataURL(file);
@@ -46,39 +47,57 @@ export default function SettingsPage() {
 
     const currencyOptions = getCurrencyOptions();
 
-    const handleCurrencyUpdate = () => {
-        const currencyInfo = CURRENCIES[selectedCurrency];
-        updateSettings({
-            currency: selectedCurrency,
-            symbol: currencyInfo.symbol,
-        });
-        alert('Currency updated successfully!');
-    };
-
-    const handleClearTransactions = () => {
-        if (!username) return;
-        if (confirm('Are you sure you want to clear all transactions? This cannot be undone.')) {
-            clearAllTransactions(username);
-            alert('All transactions cleared!');
-            router.push('/dashboard');
+    const handleCurrencyUpdate = async () => {
+        setSaving(true);
+        try {
+            const currencyInfo = CURRENCIES[selectedCurrency];
+            await updateSettings({
+                currency: selectedCurrency,
+                symbol: currencyInfo.symbol,
+            });
+            alert('Currency updated successfully!');
+        } catch (error) {
+            console.error('Failed to update currency:', error);
+            alert('Failed to update currency');
+        } finally {
+            setSaving(false);
         }
     };
 
-    const handleFactoryReset = () => {
-        if (!username) return;
+    const handleClearTransactions = async () => {
+        if (confirm('Are you sure you want to clear all transactions? This cannot be undone.')) {
+            try {
+                await api.deleteAllTransactions();
+                alert('All transactions cleared!');
+                router.push('/dashboard');
+            } catch (error) {
+                console.error('Failed to clear transactions:', error);
+                alert('Failed to clear transactions');
+            }
+        }
+    };
+
+    const handleFactoryReset = async () => {
         if (
             confirm(
                 'Are you sure you want to perform a factory reset? This will delete all your data including transactions, budgets, and settings. This cannot be undone.'
             )
         ) {
-            factoryReset(username);
-            logout();
-            alert('Factory reset complete. Please log in again.');
-            router.push('/login');
+            try {
+                await api.deleteAllTransactions();
+                await api.deleteAllBudgets();
+                await api.deleteUser();
+                await logout();
+                alert('Factory reset complete. Please create a new account.');
+                router.push('/signup');
+            } catch (error) {
+                console.error('Failed to perform factory reset:', error);
+                alert('Failed to perform factory reset');
+            }
         }
     };
 
-    const defaultAvatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`;
+    const defaultAvatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.username}`;
     const displayAvatar = avatarUrl || defaultAvatar;
 
     return (
@@ -92,7 +111,7 @@ export default function SettingsPage() {
                         <div className="w-24 h-24 rounded-full overflow-hidden bg-white ring-4 ring-white shadow-lg">
                             <img
                                 src={displayAvatar}
-                                alt={username || 'User'}
+                                alt={user?.username || 'User'}
                                 className="w-full h-full object-cover"
                             />
                         </div>
@@ -107,8 +126,8 @@ export default function SettingsPage() {
                         </label>
                     </div>
                     <div className="flex-1">
-                        <h2 className="text-2xl font-bold text-slate-900 mb-1">{username}</h2>
-                        <p className="text-slate-600 mb-3">{username}@fintrack.app</p>
+                        <h2 className="text-2xl font-bold text-slate-900 mb-1">{user?.username}</h2>
+                        <p className="text-slate-600 mb-3">{user?.email}</p>
                         <div className="flex items-center gap-4 text-sm">
                             <div className="flex items-center gap-2">
                                 <div className="w-2 h-2 bg-green-500 rounded-full"></div>
@@ -139,8 +158,8 @@ export default function SettingsPage() {
                         ))}
                     </select>
 
-                    <button onClick={handleCurrencyUpdate} className="btn-primary">
-                        Update Currency
+                    <button onClick={handleCurrencyUpdate} disabled={saving} className="btn-primary">
+                        {saving ? 'Updating...' : 'Update Currency'}
                     </button>
                 </div>
             </div>

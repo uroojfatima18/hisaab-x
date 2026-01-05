@@ -7,27 +7,47 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 import BalanceCard from '@/components/dashboard/BalanceCard';
 import ActionCard from '@/components/dashboard/ActionCard';
 import TransactionRow from '@/components/dashboard/TransactionRow';
-import { getTransactions, deleteTransaction, getBudgets } from '@/lib/storage';
-import { Transaction } from '@/types/transaction';
-import { Budget } from '@/types/budget';
+import * as api from '@/lib/api';
 import { Minus, Plus, ShoppingBag, Target } from 'lucide-react';
+
+interface TransactionDisplay {
+    id: string;
+    date: string;
+    type: 'income' | 'expense';
+    category: string;
+    description: string;
+    amount_paisa: number;
+}
 
 export default function DashboardPage() {
     const router = useRouter();
-    const { username } = useAuth();
-    const [transactions, setTransactions] = useState<Transaction[]>([]);
-    const [budgets, setBudgets] = useState<Budget[]>([]);
+    const { isAuthenticated } = useAuth();
+    const [transactions, setTransactions] = useState<TransactionDisplay[]>([]);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (username) {
+        if (isAuthenticated) {
             loadData();
         }
-    }, [username]);
+    }, [isAuthenticated]);
 
-    const loadData = () => {
-        if (!username) return;
-        setTransactions(getTransactions(username));
-        setBudgets(getBudgets(username));
+    const loadData = async () => {
+        setLoading(true);
+        try {
+            const { transactions: data } = await api.getTransactions();
+            setTransactions(data.map(t => ({
+                id: t.id,
+                date: t.date.split('T')[0],
+                type: t.type as 'income' | 'expense',
+                category: t.category,
+                description: t.description,
+                amount_paisa: t.amountPaisa,
+            })));
+        } catch (error) {
+            console.error('Failed to load transactions:', error);
+        } finally {
+            setLoading(false);
+        }
     };
 
     // Calculate current month data
@@ -53,13 +73,26 @@ export default function DashboardPage() {
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
         .slice(0, 5);
 
-    const handleDeleteTransaction = (id: string) => {
-        if (!username) return;
+    const handleDeleteTransaction = async (id: string) => {
         if (confirm('Delete this transaction?')) {
-            deleteTransaction(username, id);
-            loadData();
+            try {
+                await api.deleteTransaction(id);
+                await loadData();
+            } catch (error) {
+                console.error('Failed to delete transaction:', error);
+            }
         }
     };
+
+    if (loading) {
+        return (
+            <DashboardLayout>
+                <div className="flex items-center justify-center h-64">
+                    <div className="text-lg text-slate-500">Loading...</div>
+                </div>
+            </DashboardLayout>
+        );
+    }
 
     return (
         <DashboardLayout>
